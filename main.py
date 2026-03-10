@@ -1,4 +1,5 @@
 import pygame
+import random
 
 '''
 This is an application that replicates the Konoha mode from T****s the Grand Master 4 (TGM Rule).
@@ -11,7 +12,7 @@ class Engine:
         self.current_piece = None
         self.next_piece = None
         self.hold_piece = None
-        self.level = 1
+        self.level = 0
         self.lines_cleared = 0
         self.all_clears = 0
 
@@ -41,7 +42,7 @@ class Piece:
         position is the top left corner of the 4x4 mask. The piece will be drawn on the board according to the mask, with the top left corner of the mask at (x, y).
         '''
         self.x = 3
-        self.y = 18 #spawn on 20-21st row, but we want to be able to see the piece when it spawns
+        self.y = 17 #spawn on 21-22nd row, but we want to be able to see the piece when it spawns
 
     def get_mask(self, type, orientation):
         if type == 0: #I
@@ -148,19 +149,19 @@ class Piece:
 
     def get_color(self):
         if self.type == 0: #I
-            return pygame.Color.Red
+            return pygame.Color('red')
         elif self.type == 1: #T
-            return pygame.Color.Cyan
+            return pygame.Color('cyan')
         elif self.type == 2: #L
-            return pygame.Color.Orange
+            return pygame.Color('orange')
         elif self.type == 3: #J
-            return pygame.Color.Blue
+            return pygame.Color('blue')
         elif self.type == 4: #S
-            return pygame.Color.Purple
+            return pygame.Color('purple')
         elif self.type == 5: #Z
-            return pygame.Color.Green
+            return pygame.Color('green')
         else: #O
-            return pygame.Color.Yellow
+            return pygame.Color('yellow')
 
 class Mino:
     '''
@@ -168,7 +169,7 @@ class Mino:
     '''
     def __init__(self):
         self.filled = False
-        self.color = pygame.Color.Black
+        self.color = pygame.Color('black')
 
 class Game:
     '''
@@ -183,18 +184,49 @@ class Renderer:
     '''
     def __init__(self, screen):
         self.screen = screen
+        self.engine = None
+    
+    def draw_board(self, board):
+        for y in range(board.height):
+            for x in range(board.width):
+                mino = board.grid[y][x]
+                if mino.filled:
+                    pygame.draw.rect(self.screen, mino.color, (x * 16 + HORIZONATAL_OFFSET, y * 16 + VERTICAL_OFFSET, 16, 16))
+                if self.is_piece_at(x, y):
+                    piece = self.engine.current_piece
+                    pygame.draw.rect(self.screen, piece.color, (x * 16 + HORIZONATAL_OFFSET, y * 16 + VERTICAL_OFFSET, 16, 16))
+                elif (y >= 20): # only draw grid lines for the visible part of the board
+                    pygame.draw.rect(self.screen, pygame.Color('lightgray'), (x * 16 + HORIZONATAL_OFFSET, y * 16 + VERTICAL_OFFSET, 16, 16), 1)
+
+    def is_piece_at(self, x, y):
+        if self.engine.current_piece is None:
+            return False
+        piece = self.engine.current_piece
+        for py in range(4):
+            for px in range(4):
+                if piece.mask[py][px] == 1:
+                    if piece.x + px == x and piece.y + py == y:
+                        return True
+        return False
 
 # Initialize Pygame
 pygame.init()
 
 # Set up the display
 WIDTH, HEIGHT = 800, 600
+HORIZONATAL_OFFSET = (WIDTH - 10 * 16) // 2
+VERTICAL_OFFSET = -(20 * 16) + (HEIGHT - 20 * 16) // 2
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Auto-Konoha")
 
 # Clock for controlling frame rate
 clock = pygame.time.Clock()
 FPS = 60
+
+game = Game()
+renderer = Renderer(screen)
+renderer.engine = game.engine
+game.engine.current_piece = Piece(random.randint(0, 6))  # test piece
 
 # Main game loop
 running = True
@@ -204,9 +236,11 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+
+    screen.fill((255, 255, 255))  # Clear the screen with white background
     
-    # Fill screen with color
-    screen.fill((0, 0, 0))
+    # Draw the game elements
+    renderer.draw_board(game.engine.board)
     
     # Update display
     pygame.display.flip()
