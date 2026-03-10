@@ -15,9 +15,8 @@ class Board:
     '''
     def __init__(self):
         self.width = 10
-        self.height = 20
-        self.hidden_rows = 20
-        self.grid = [[Mino() for _ in range(self.width)] for _ in range(self.height + self.hidden_rows)]
+        self.height = 40
+        self.grid = [[Mino() for _ in range(self.width)] for _ in range(self.height)]
 
 class Piece:
     '''
