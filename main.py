@@ -7,7 +7,13 @@ This is an application that replicates the Konoha mode from T****s the Grand Mas
 
 class Engine:
     def __init__(self):
-        pass
+        self.board = Board()
+        self.current_piece = None
+        self.next_piece = None
+        self.hold_piece = None
+        self.level = 1
+        self.lines_cleared = 0
+        self.all_clears = 0
 
 class Board:
     '''
@@ -30,6 +36,12 @@ class Piece:
         self.type = type
         self.mask = self.get_mask(type, orientation=0)
         self.orientation = 0
+        self.color = self.get_color()
+        '''
+        position is the top left corner of the 4x4 mask. The piece will be drawn on the board according to the mask, with the top left corner of the mask at (x, y).
+        '''
+        self.x = 3
+        self.y = 18 #spawn on 20-21st row, but we want to be able to see the piece when it spawns
 
     def get_mask(self, type, orientation):
         if type == 0: #I
@@ -156,6 +168,21 @@ class Mino:
     '''
     def __init__(self):
         self.filled = False
+        self.color = pygame.Color.Black
+
+class Game:
+    '''
+    This class represents the game itself. It has an engine and methods to run the game loop and handle input.
+    '''
+    def __init__(self):
+        self.engine = Engine()
+
+class Renderer:
+    '''
+    This class is responsible for drawing the game on the screen. It has a method to draw the board and pieces.
+    '''
+    def __init__(self, screen):
+        self.screen = screen
 
 # Initialize Pygame
 pygame.init()
