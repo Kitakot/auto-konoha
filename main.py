@@ -14,9 +14,9 @@ class Board:
     This class represents the game board. It has a grid of minos and methods to manipulate the board.
     '''
     def __init__(self):
-        self.width = 5
-        self.height = 10
-        self.hidden_rows = 10
+        self.width = 10
+        self.height = 20
+        self.hidden_rows = 20
         self.grid = [[Mino() for _ in range(self.width)] for _ in range(self.height + self.hidden_rows)]
 
 class Piece:
@@ -135,6 +135,21 @@ class Piece:
                     [0, 1, 1, 0],
                     [0, 0, 0, 0]]
 
+    def get_color(self):
+        if self.type == 0: #I
+            return pygame.Color.Red
+        elif self.type == 1: #T
+            return pygame.Color.Cyan
+        elif self.type == 2: #L
+            return pygame.Color.Orange
+        elif self.type == 3: #J
+            return pygame.Color.Blue
+        elif self.type == 4: #S
+            return pygame.Color.Purple
+        elif self.type == 5: #Z
+            return pygame.Color.Green
+        else: #O
+            return pygame.Color.Yellow
 
 class Mino:
     '''
