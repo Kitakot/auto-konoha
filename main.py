@@ -259,7 +259,7 @@ class Game:
         elif piece.type in [2, 3, 4, 5]: # L, J, S, Z
             for i in range(1, -1, -2): # Try kicks of 1 cell to the right and left
                 if not self.check_piece_collision(piece, dx=i, dy=0, rotation=rotation):
-                    if piece.orientation % 2 == 0 and not self.check_center_column(piece): # from 3-wide to 2-wide, no kick off center column
+                    if piece.type in [2, 3] and piece.orientation % 2 == 0 and not self.check_center_column(piece): # from 3-wide to 2-wide, no kick off center column
                             continue
                     return (i, 0) # Kick by i cells horizontally
             return None # Rotation not possible
@@ -273,18 +273,20 @@ class Game:
         else: # I-piece
             for dx, dy in [(1, 0), (2, 0), (-1, 0), (0, -1), (0, -2)]: # Try kicks in order: no kick, right 1, right 2, left 1, up 1, up 2
                 if not self.check_piece_collision(piece, dx=dx, dy=dy, rotation=rotation):
-                    if dx == 2 or dx == 1 and not self.check_piece_collision(piece, dx=1, dy=0, rotation=rotation): # I-piece needs to be touching part of the stack to kick one cell to the right
+                    if (dx == 2 or dx == 1) and not self.check_piece_collision(piece, dx=-1, dy=0, rotation=rotation): # I-piece needs to be touching part of the stack to kick one cell to the right
                         continue
-                    if dy < 0 and not self.check_piece_collision(piece, dx=0, dy=-1, rotation=rotation): # T and I-piece need to be touching part of the stack to kick up.
+                    if dy < 0 and not self.check_piece_collision(piece, dx=0, dy=1, rotation=rotation): # T and I-piece need to be touching part of the stack to kick up.
                         continue
                     return (dx, dy) # Kick by (dx, dy)
             return None # Rotation not possible
 
     def check_center_column(self, piece):
-        for dx in range(-1, 2):
-            for dy in range(-1, 2):
-                if self.engine.board.grid[piece.y + dy][piece.x + dx].filled:
-                    if dx == 0:
+        for dx in range(0, 3):
+            for dy in range(0, 3):
+                if piece.y + dy >= self.engine.board.height or piece.x + dx < 0 or piece.x + dx >= self.engine.board.width:
+                    continue
+                if self.engine.board.grid[piece.y + dy][piece.x + dx].filled and piece.mask[dy][dx] == 1:
+                    if dx == 1:
                         return True
                     else:
                         return False
