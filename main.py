@@ -12,9 +12,31 @@ class Engine:
         self.current_piece = None
         self.next_piece = None
         self.hold_piece = None
-        self.level = 0
+        self.level = 0 # Current level, determines the speed of the pieces. Increases after each piece placed and line clear.
         self.lines_cleared = 0
-        self.all_clears = 0
+        self.all_clears = 0 # Number of times the player has cleared the board completely.
+        self.time = 0 # Time left in the current level, in frames. When it reaches 0, the player loses.
+        self.big_mode = False # Big mode, when true, the pieces are 2x2 blocks instead of 1x1 blocks.
+
+        '''
+        Control Handling
+        '''
+        self.das = 0 # Delayed Auto Shift, how many frames to wait before moving the piece again when holding down a key
+        self.das_counter = 0 # Counter for DAS, counts how many frames the key has been held down
+
+        self.arr = 0 # Auto Repeat Rate, how many frames to wait between moving the piece when holding down a key after the initial DAS delay
+        self.arr_counter = 0 # Counter for ARR, counts how many frames since the last move when holding down a key after the initial DAS delay
+
+        self.are = 0 # ARE, how many frames to wait after a piece is placed before the next piece spawns
+        self.are_counter = 0 # Counter for ARE, counts how many frames since the last piece was placed
+
+        self.line_are = 0 # Line ARE, how many frames to wait after a line is cleared before the next piece spawns
+        self.line_are_counter = 0 # Counter for Line ARE, counts how many frames since the last line was cleared
+
+        self.lock_delay = 0 # Lock delay, how many frames to wait before locking the piece in place after it has landed
+        self.lock_delay_counter = 0 # Counter for lock delay, counts how many frames since the piece has landed
+
+        self.gravity = 0 # Gravity, measured in cells per frame (G). Determines how fast the piece falls. Increases with level. Caps at 21G.
 
 class Board:
     '''
@@ -152,7 +174,7 @@ class Piece:
                   pygame.Color('cyan'),
                   pygame.Color('orange'),
                   pygame.Color('blue'),
-                  pygame.Color('purple'),
+                  pygame.Color('magenta'),
                   pygame.Color('green'),
                   pygame.Color('yellow')]
         return colors[self.type]
