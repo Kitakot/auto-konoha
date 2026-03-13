@@ -12,6 +12,7 @@ class Engine:
         self.current_piece = None
         self.next_piece = None
         self.hold_piece = None
+        self.hold_used = False # Whether the player has used their hold for the current piece, resets when a new piece spawns.
         self.level = 0 # Current level, determines the speed of the pieces. Increases after each piece placed and line clear.
         self.lines_cleared = 0
         self.all_clears = 0 # Number of times the player has cleared the board completely.
@@ -21,22 +22,23 @@ class Engine:
         '''
         Control Handling
         '''
-        self.das = 0 # Delayed Auto Shift, how many frames to wait before moving the piece again when holding down a key
+        self.das = 18 # Delayed Auto Shift, how many frames to wait before moving the piece again when holding down a key
         self.das_counter = 0 # Counter for DAS, counts how many frames the key has been held down
 
-        self.arr = 0 # Auto Repeat Rate, how many frames to wait between moving the piece when holding down a key after the initial DAS delay
+        self.arr = 1 # Auto Repeat Rate, how many frames to wait between moving the piece when holding down a key after the initial DAS delay
         self.arr_counter = 0 # Counter for ARR, counts how many frames since the last move when holding down a key after the initial DAS delay
 
-        self.are = 0 # ARE, how many frames to wait after a piece is placed before the next piece spawns
+        self.are = 27 # ARE, how many frames to wait after a piece is placed before the next piece spawns
         self.are_counter = 0 # Counter for ARE, counts how many frames since the last piece was placed
 
-        self.line_are = 0 # Line ARE, how many frames to wait after a line is cleared before the next piece spawns
+        self.line_are = 25 # Line ARE, how many frames to wait after a line is cleared before the next piece spawns
         self.line_are_counter = 0 # Counter for Line ARE, counts how many frames since the last line was cleared
 
-        self.lock_delay = 0 # Lock delay, how many frames to wait before locking the piece in place after it has landed
+        self.lock_delay = 60 # Lock delay, how many frames to wait before locking the piece in place after it has landed
         self.lock_delay_counter = 0 # Counter for lock delay, counts how many frames since the piece has landed
 
-        self.gravity = 0 # Gravity, measured in cells per frame (G). Determines how fast the piece falls. Increases with level. Caps at 21G.
+        self.gravity = 4/256 # Gravity, measured in cells per frame (G). Determines how fast the piece falls. Increases with level. Caps at 21G.
+        self.gravity_counter = 0 # Counter for gravity, counts the accumulated gavity in cells. When it reaches 1, the piece falls by one cell and the counter resets.
 
 class Board:
     '''
@@ -64,7 +66,7 @@ class Piece:
         position is the top left corner of the 4x4 mask. The piece will be drawn on the board according to the mask, with the top left corner of the mask at (x, y).
         '''
         self.x = 3
-        self.y = 17 #spawn on 21-22nd row, but we want to be able to see the piece when it spawns
+        self.y = 19 #spawn on 21-22nd row, but we want to be able to see the piece when it spawns
 
     def get_mask(self, type, orientation):
         if type == 0: #I
@@ -194,6 +196,33 @@ class Game:
     def __init__(self):
         self.engine = Engine()
 
+    def get_input(self):
+        '''
+        This method handles user input. It serializes the current state of the controls (which keys are pressed) and updates the engine's control variables accordingly.
+        Output could be a dictionary like {'left': True, 'right': False, 'rotate': False, 'soft_drop': True, 'hard_drop': False, 'hold': False}, which indicates which controls are currently active.
+        '''
+        pass
+
+    def update(self):
+        '''
+        This method updates the game state. It should be called every frame. It updates the engine's state based on the current controls and the passage of time.
+        '''
+        self.engine.time -= 1
+        
+        input = self.get_input()
+
+        # Update engine state based on input and time passage here
+        if self.engine.current_piece is not None:
+            # Handle piece movement, rotation, gravity, lock delay, ARE, line clears, etc. here
+            pass
+
+        self.engine.gravity_counter += self.engine.gravity
+        while self.engine.gravity_counter >= 1:
+            self.engine.gravity_counter -= 1
+            self.engine.current_piece.y += 1
+            # Move piece down by one cell here
+
+
 class Renderer:
     '''
     This class is responsible for drawing the game on the screen. It has a method to draw the board and pieces.
@@ -252,6 +281,8 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+
+    game.update()
 
     screen.fill((255, 255, 255))  # Clear the screen with white background
     
