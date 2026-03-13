@@ -196,6 +196,39 @@ class Game:
     def __init__(self):
         self.engine = Engine()
 
+    def is_piece_landed(self):
+        '''
+        This method checks if the current piece has landed. A piece is considered landed if it cannot move down any further without colliding with the board or other pieces.
+        '''
+        piece = self.engine.current_piece
+        if piece is None:
+            return False
+        for py in range(4):
+            for px in range(4):
+                if piece.mask[py][px] == 1:
+                    board_x = piece.x + px
+                    board_y = piece.y + py + 1 # check one cell below the current position
+                    if board_y >= self.engine.board.height: # check if it's at the bottom of the board
+                        return True
+                    if self.engine.board.grid[board_y][board_x].filled: # check if there's a filled cell below
+                        return True
+        return False
+    
+    def lock_piece(self):
+        '''
+        This method locks the current piece in place on the board. It should be called when the piece has landed and the lock delay has passed.
+        It updates the board grid to fill in the cells occupied by the piece, and then sets the current piece to None to spawn a new piece.
+        '''
+        piece = self.engine.current_piece
+        for py in range(4):
+            for px in range(4):
+                if piece.mask[py][px] == 1:
+                    board_x = piece.x + px
+                    board_y = piece.y + py
+                    self.engine.board.grid[board_y][board_x].filled = True
+                    self.engine.board.grid[board_y][board_x].color = piece.color
+        self.engine.current_piece = None
+
     def get_input(self):
         '''
         This method handles user input. It serializes the current state of the controls (which keys are pressed) and updates the engine's control variables accordingly.
@@ -217,10 +250,19 @@ class Game:
             pass
 
         self.engine.gravity_counter += self.engine.gravity
-        while self.engine.gravity_counter >= 1:
+
+        if self.engine.current_piece is not None and self.is_piece_landed():
+            self.engine.lock_delay_counter += 1
+            self.engine.gravity_counter = 0 # reset gravity counter when piece lands
+            if self.engine.lock_delay_counter >= self.engine.lock_delay:
+                self.engine.lock_delay_counter = 0
+                self.lock_piece()
+                pass
+
+        while self.engine.gravity_counter >= 1 and self.engine.current_piece is not None and not self.is_piece_landed():
             self.engine.gravity_counter -= 1
             self.engine.current_piece.y += 1
-            # Move piece down by one cell here
+            self.engine.lock_delay_counter = 0 # reset lock delay counter when piece falls (step reset)
 
 
 class Renderer:
