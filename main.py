@@ -196,23 +196,29 @@ class Game:
     def __init__(self):
         self.engine = Engine()
 
+    def check_piece_collision(self, piece, dx=0, dy=0, rotation=0):
+        '''
+        This method checks if the given piece would collide with the board or other pieces if it were moved by (dx, dy) and rotated by rotation steps.
+        It returns True if there would be a collision, and False otherwise.
+        '''
+        new_orientation = (piece.orientation + rotation) % 4
+        new_mask = piece.get_mask(piece.type, new_orientation)
+        for py in range(4):
+            for px in range(4):
+                if new_mask[py][px] == 1:
+                    board_x = piece.x + px + dx
+                    board_y = piece.y + py + dy
+                    if board_x < 0 or board_x >= self.engine.board.width or board_y >= self.engine.board.height:
+                        return True # Collision with walls or floor
+                    if board_y >= 0 and self.engine.board.grid[board_y][board_x].filled:
+                        return True # Collision with filled cells
+        return False
+
     def is_piece_landed(self):
         '''
         This method checks if the current piece has landed. A piece is considered landed if it cannot move down any further without colliding with the board or other pieces.
         '''
-        piece = self.engine.current_piece
-        if piece is None:
-            return False
-        for py in range(4):
-            for px in range(4):
-                if piece.mask[py][px] == 1:
-                    board_x = piece.x + px
-                    board_y = piece.y + py + 1 # check one cell below the current position
-                    if board_y >= self.engine.board.height: # check if it's at the bottom of the board
-                        return True
-                    if self.engine.board.grid[board_y][board_x].filled: # check if there's a filled cell below
-                        return True
-        return False
+        return self.check_piece_collision(self.engine.current_piece, dx=0, dy=1)
     
     def lock_piece(self):
         '''
@@ -229,10 +235,65 @@ class Game:
                     self.engine.board.grid[board_y][board_x].color = piece.color
         self.engine.current_piece = None
 
+    def check_rotation(self, piece, rotation):
+        '''
+        This method checks if the given piece can be rotated by rotation steps without colliding with the board or other pieces.
+        It returns kick offsets if the rotation is possible, or None if it is not. The kick offsets are a list of (dx, dy) pairs that should be tried in order to see if the piece can be rotated with a kick.
+        Kick logic:
+        O: No kicks
+        L, J, S, Z: 0: (0, 0), 1: (1, 0), 2: (-1, 0)
+        T: 0: (0, 0), 1: (1, 0), 2: (-1, 0), 3: (0, -1)
+        I: (0, 0), (1, 0), (2, 0), (-1, 0), (0, -1), (0, -2)
+
+        - L, J, and T-pieces, from their 3-wide orientations, will not kick off their center column.
+        - The I-piece needs to be touching part of the stack to kick one cell to the right.
+        - rotating a T or I-piece after it has floor kicked will permanently set the lock delay for that piece to zero.
+        This is actually what prevents the second I floorkick. After the second rotation is processed, movement gets processed, allowing a shift of one cell left or right if it's done fast enough.
+        Gravity is then applied. If the I-piece is not in contact with an occupied cell below after processing gravity, any attempt to floorkick will fail.
+        If contact does exist, the piece will instantly lock down, preventing rotation from being processed at all.
+        '''
+        if not self.check_piece_collision(piece, dx=0, dy=0, rotation=rotation):
+            return (0, 0) # No kick, just a normal rotation
+        if piece.type == 6: # O-piece, no kicks
+            return None
+        elif piece.type in [2, 3, 4, 5]: # L, J, S, Z
+            for i in range(1, -1, -2): # Try kicks of 1 cell to the right and left
+                if not self.check_piece_collision(piece, dx=i, dy=0, rotation=rotation):
+                    if piece.orientation % 2 == 0 and not self.check_center_column(piece): # from 3-wide to 2-wide, no kick off center column
+                            continue
+                    return (i, 0) # Kick by i cells horizontally
+            return None # Rotation not possible
+        elif piece.type == 1: # T-piece
+            for dx, dy in [(1, 0), (-1, 0), (0, -1)]: # Try kicks in order: no kick, right, left, up
+                if not self.check_piece_collision(piece, dx=dx, dy=dy, rotation=rotation):
+                    if piece.orientation % 2 == 0 and not self.check_center_column(piece): # from 3-wide to 2-wide, no kick off center column
+                            continue
+                    return (dx, dy) # Kick by (dx, dy)
+            return None # Rotation not possible
+        else: # I-piece
+            for dx, dy in [(1, 0), (2, 0), (-1, 0), (0, -1), (0, -2)]: # Try kicks in order: no kick, right 1, right 2, left 1, up 1, up 2
+                if not self.check_piece_collision(piece, dx=dx, dy=dy, rotation=rotation):
+                    if dx == 2 or dx == 1 and not self.check_piece_collision(piece, dx=1, dy=0, rotation=rotation): # I-piece needs to be touching part of the stack to kick one cell to the right
+                        continue
+                    if dy < 0 and not self.check_piece_collision(piece, dx=0, dy=-1, rotation=rotation): # T and I-piece need to be touching part of the stack to kick up.
+                        continue
+                    return (dx, dy) # Kick by (dx, dy)
+            return None # Rotation not possible
+
+    def check_center_column(self, piece):
+        for dx in range(-1, 2):
+            for dy in range(-1, 2):
+                if self.engine.board.grid[piece.y + dy][piece.x + dx].filled:
+                    if dx == 0:
+                        return True
+                    else:
+                        return False
+        return False
+
     def get_input(self):
         '''
         This method handles user input. It serializes the current state of the controls (which keys are pressed) and updates the engine's control variables accordingly.
-        Output could be a dictionary like {'left': True, 'right': False, 'rotate': False, 'soft_drop': True, 'hard_drop': False, 'hold': False}, which indicates which controls are currently active.
+        Output could be a dictionary like {'left': True, 'right': False, 'ccw1': False, 'cw1': False, 'ccw2': False, 'cw2': False, 'soft_drop': True, 'hard_drop': False, 'hold': False}, which indicates which controls are currently active.
         '''
         pass
 
@@ -246,8 +307,9 @@ class Game:
 
         # Update engine state based on input and time passage here
         if self.engine.current_piece is not None:
-            # Handle piece movement, rotation, gravity, lock delay, ARE, line clears, etc. here
-            pass
+            if input['ccw1']:
+                if self.check_rotation(self.engine.current_piece, rotation=-1) is not None:
+                    pass
 
         self.engine.gravity_counter += self.engine.gravity
 
