@@ -148,20 +148,14 @@ class Piece:
                     [0, 0, 0, 0]]
 
     def get_color(self):
-        if self.type == 0: #I
-            return pygame.Color('red')
-        elif self.type == 1: #T
-            return pygame.Color('cyan')
-        elif self.type == 2: #L
-            return pygame.Color('orange')
-        elif self.type == 3: #J
-            return pygame.Color('blue')
-        elif self.type == 4: #S
-            return pygame.Color('purple')
-        elif self.type == 5: #Z
-            return pygame.Color('green')
-        else: #O
-            return pygame.Color('yellow')
+        colors = [pygame.Color('red'),
+                  pygame.Color('cyan'),
+                  pygame.Color('orange'),
+                  pygame.Color('blue'),
+                  pygame.Color('purple'),
+                  pygame.Color('green'),
+                  pygame.Color('yellow')]
+        return colors[self.type]
 
 class Mino:
     '''
