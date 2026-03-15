@@ -62,11 +62,12 @@ class Piece:
         self.mask = self.get_mask(type, orientation=0)
         self.orientation = 0
         self.color = self.get_color()
+        self.floorkicks = 0 # number of times the piece has floorkicked, resets when the piece spawns. Used to determine if the piece can still floorkick, and to set lock delay to 0 after the second floorkick.
         '''
         position is the top left corner of the 4x4 mask. The piece will be drawn on the board according to the mask, with the top left corner of the mask at (x, y).
         '''
         self.x = 3
-        self.y = 19 #spawn on 21-22nd row, but we want to be able to see the piece when it spawns
+        self.y = 19
 
     def get_mask(self, type, orientation):
         if type == 0: #I
@@ -256,37 +257,36 @@ class Game:
             return (0, 0) # No kick, just a normal rotation
         if piece.type == 6: # O-piece, no kicks
             return None
-        elif piece.type in [2, 3, 4, 5]: # L, J, S, Z
-            for i in range(1, -1, -2): # Try kicks of 1 cell to the right and left
-                if not self.check_piece_collision(piece, dx=i, dy=0, rotation=rotation):
-                    if piece.type in [2, 3] and piece.orientation % 2 == 0 and not self.check_center_column(piece): # from 3-wide to 2-wide, no kick off center column
+        elif piece.type in [1, 2, 3, 4, 5]: # T, L, J, S, Z
+            for dx in [1, -1]: # Try kicks of 1 cell to the right and left
+                if not self.check_piece_collision(piece, dx=dx, dy=0, rotation=rotation):
+                    if piece.type in [1, 2, 3] and piece.orientation % 2 == 0 and self.check_center_column(piece, rotation): # from 3-wide to 2-wide, no kick off center column
                             continue
-                    return (i, 0) # Kick by i cells horizontally
-            return None # Rotation not possible
-        elif piece.type == 1: # T-piece
-            for dx, dy in [(1, 0), (-1, 0), (0, -1)]: # Try kicks in order: no kick, right, left, up
-                if not self.check_piece_collision(piece, dx=dx, dy=dy, rotation=rotation):
-                    if piece.orientation % 2 == 0 and not self.check_center_column(piece): # from 3-wide to 2-wide, no kick off center column
-                            continue
-                    return (dx, dy) # Kick by (dx, dy)
+                    return (dx, 0) # Kick by dx cells horizontally
+            if piece.type == 1 and (piece.orientation + rotation) % 4 == 2 and piece.floorkicks == 0 and self.check_piece_collision(piece, dx=0, dy=1) and not self.check_piece_collision(piece, dx=0, dy=-1, rotation=rotation): # T-piece, rotating flat side down, try floor kick if the piece is touching the stack and hasn't floorkicked yet
+                piece.floorkicks += 1
+                return (0, -1) # Kick by 1 cell upwards
             return None # Rotation not possible
         else: # I-piece
-            for dx, dy in [(1, 0), (2, 0), (-1, 0), (0, -1), (0, -2)]: # Try kicks in order: no kick, right 1, right 2, left 1, up 1, up 2
-                if not self.check_piece_collision(piece, dx=dx, dy=dy, rotation=rotation):
-                    if (dx == 2 or dx == 1) and not self.check_piece_collision(piece, dx=-1, dy=0, rotation=rotation): # I-piece needs to be touching part of the stack to kick one cell to the right
-                        continue
-                    if dy < 0 and not self.check_piece_collision(piece, dx=0, dy=1, rotation=rotation): # T and I-piece need to be touching part of the stack to kick up.
-                        continue
-                    return (dx, dy) # Kick by (dx, dy)
-            return None # Rotation not possible
+            if (piece.orientation + rotation) % 2 == 0 and (self.check_piece_collision(piece, dx=-1, dy=0) or self.check_piece_collision(piece, dx=1, dy=0)): # from 1 wide to 4-wide, needs to be touching stack to kick
+                for dx in [1, 2, -1]:
+                    if not self.check_piece_collision(piece, dx=dx, dy=0, rotation=rotation):
+                        return (dx, 0) # Horizontal kick by dx cells
+            elif (piece.orientation + rotation) % 2 == 1 and self.check_piece_collision(piece, dx=0, dy=1) and piece.floorkicks == 0: # needs to be touching stack to floor kick
+                for dy in[-1, -2]:
+                    if not self.check_piece_collision(piece, dx=0, dy=dy, rotation=rotation):
+                        piece.floorkicks = 1
+                        return (0, dy) # Floor kick by dy cells
 
-    def check_center_column(self, piece):
-        for dx in range(0, 3):
-            for dy in range(0, 3):
-                if piece.y + dy >= self.engine.board.height or piece.x + dx < 0 or piece.x + dx >= self.engine.board.width:
-                    continue
-                if self.engine.board.grid[piece.y + dy][piece.x + dx].filled and piece.mask[dy][dx] == 1:
-                    if dx == 1:
+                    
+
+    def check_center_column(self, piece, rotation=0):
+        new_orientation = (piece.orientation + rotation) % 4
+        new_mask = piece.get_mask(piece.type, new_orientation)
+        for dy in range(0, 3):
+            for dx in range(0, 3):
+                if ((piece.y + dy >= self.engine.board.height or piece.x + dx < 0 or piece.x + dx >= self.engine.board.width) or self.engine.board.grid[piece.y + dy][piece.x + dx].filled) and new_mask[dy][dx] == 1:
+                    if dx == 1: # center column
                         return True
                     else:
                         return False
