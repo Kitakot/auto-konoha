@@ -196,6 +196,7 @@ class Game:
     '''
     def __init__(self):
         self.engine = Engine()
+        self.held_input = {'left': False, 'right': False, 'ccw1': False, 'cw1': False, 'ccw2': False, 'cw2': False, 'soft_drop': False, 'hard_drop': False} # Dictionary to keep track of which controls were held down in the previous frame, used to detect when a key is pressed down or released.
 
     def check_piece_collision(self, piece, dx=0, dy=0, rotation=0):
         '''
@@ -296,7 +297,26 @@ class Game:
         This method handles user input. It serializes the current state of the controls (which keys are pressed) and updates the engine's control variables accordingly.
         Output could be a dictionary like {'left': True, 'right': False, 'ccw1': False, 'cw1': False, 'ccw2': False, 'cw2': False, 'soft_drop': True, 'hard_drop': False, 'hold': False}, which indicates which controls are currently active.
         '''
-        pass
+        keys = pygame.key.get_pressed()
+        left = keys[pygame.K_LEFT]
+        right = keys[pygame.K_RIGHT]
+        ccw1 = keys[pygame.K_a]
+        cw1 = keys[pygame.K_s]
+        ccw2 = keys[pygame.K_q]
+        cw2 = keys[pygame.K_w]
+        soft_drop = keys[pygame.K_DOWN]
+        hard_drop = keys[pygame.K_UP]
+
+        return {
+            'left': left,
+            'right': right,
+            'ccw1': ccw1,
+            'cw1': cw1,
+            'ccw2': ccw2,
+            'cw2': cw2,
+            'soft_drop': soft_drop,
+            'hard_drop': hard_drop
+        }
 
     def update(self):
         '''
@@ -306,11 +326,32 @@ class Game:
         
         input = self.get_input()
 
-        # Update engine state based on input and time passage here
+        '''
+        Control handling logic:
+        Movement: [move] -> [DAS] -> [move] -> [ARR] -> [move] -> [ARR] -> repeat [move] and [ARR]
+        Rotation: Immediate on key pressed down, no effect on holding down.
+        Hold: Immediate on key pressed down, no effect on holding down. Cannot be used again until the next piece spawns.
+        Soft drop: While held down, increases gravity by 1G. Locks the piece in place immediately when it lands.
+        Sonic Drop: Immediate on key pressed down, drops the piece to the lowest possible position instantly. Does not lock the piece in place. no effect on holding down.
+        '''
         if self.engine.current_piece is not None:
-            if input['ccw1']:
-                if self.check_rotation(self.engine.current_piece, rotation=-1) is not None:
-                    pass
+            if input is not None:
+                if input['ccw1'] and not self.held_input['ccw1']:
+                    kick = self.check_rotation(self.engine.current_piece, rotation=-1)
+                    if kick is not None:
+                        self.engine.current_piece.orientation = (self.engine.current_piece.orientation - 1) % 4
+                        self.engine.current_piece.mask = self.engine.current_piece.get_mask(self.engine.current_piece.type, self.engine.current_piece.orientation)
+                        self.engine.current_piece.x += kick[0]
+                        self.engine.current_piece.y += kick[1]
+                elif input['cw1'] and not self.held_input['cw1']:
+                    kick = self.check_rotation(self.engine.current_piece, rotation=1)
+                    if kick is not None:
+                        self.engine.current_piece.orientation = (self.engine.current_piece.orientation + 1) % 4
+                        self.engine.current_piece.mask = self.engine.current_piece.get_mask(self.engine.current_piece.type, self.engine.current_piece.orientation)
+                        self.engine.current_piece.x += kick[0]
+                        self.engine.current_piece.y += kick[1]                    
+
+        self.held_input = input
 
         self.engine.gravity_counter += self.engine.gravity
 
@@ -326,6 +367,8 @@ class Game:
             self.engine.gravity_counter -= 1
             self.engine.current_piece.y += 1
             self.engine.lock_delay_counter = 0 # reset lock delay counter when piece falls (step reset)
+            if self.is_piece_landed() and self.engine.current_piece.floorkicks >= 2:
+                self.lock_piece() # if the piece has floorkicked twice, it cannot be saved from locking by further floorkicks, so it locks immediately upon landing regardless of lock delay
 
 
 class Renderer:
