@@ -277,8 +277,7 @@ class Game:
                     if not self.check_piece_collision(piece, dx=0, dy=dy, rotation=rotation):
                         piece.floorkicks = 1
                         return (0, dy) # Floor kick by dy cells
-
-                    
+        return None # Rotation not possible                    
 
     def check_center_column(self, piece, rotation=0):
         new_orientation = (piece.orientation + rotation) % 4
