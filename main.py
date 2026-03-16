@@ -236,6 +236,8 @@ class Game:
                     self.engine.board.grid[board_y][board_x].filled = True
                     self.engine.board.grid[board_y][board_x].color = piece.color
         self.engine.current_piece = None
+        self.engine.hold_used = False # reset hold usage for the next piece
+        self.engine.are_counter = 0 # reset ARE counter to start counting for the next piece
 
     def check_rotation(self, piece, rotation):
         '''
@@ -349,7 +351,65 @@ class Game:
                         self.engine.current_piece.orientation = (self.engine.current_piece.orientation + 1) % 4
                         self.engine.current_piece.mask = self.engine.current_piece.get_mask(self.engine.current_piece.type, self.engine.current_piece.orientation)
                         self.engine.current_piece.x += kick[0]
-                        self.engine.current_piece.y += kick[1]                    
+                        self.engine.current_piece.y += kick[1]
+
+                if input['ccw2'] and not self.held_input['ccw2']:
+                    kick = self.check_rotation(self.engine.current_piece, rotation=-1)
+                    if kick is not None:
+                        self.engine.current_piece.orientation = (self.engine.current_piece.orientation - 1) % 4
+                        self.engine.current_piece.mask = self.engine.current_piece.get_mask(self.engine.current_piece.type, self.engine.current_piece.orientation)
+                        self.engine.current_piece.x += kick[0]
+                        self.engine.current_piece.y += kick[1]
+
+                elif input['cw2'] and not self.held_input['cw2']:
+                    kick = self.check_rotation(self.engine.current_piece, rotation=1)
+                    if kick is not None:
+                        self.engine.current_piece.orientation = (self.engine.current_piece.orientation + 1) % 4
+                        self.engine.current_piece.mask = self.engine.current_piece.get_mask(self.engine.current_piece.type, self.engine.current_piece.orientation)
+                        self.engine.current_piece.x += kick[0]
+                        self.engine.current_piece.y += kick[1]
+
+                if input['right']:
+                    if not self.held_input['right']:
+                        if not self.check_piece_collision(self.engine.current_piece, dx=1):
+                            self.engine.current_piece.x += 1
+                    else:
+                        self.engine.das_counter += 1
+                        if self.engine.das_counter >= self.engine.das:
+                            self.engine.arr_counter += 1
+                            if self.engine.arr_counter >= self.engine.arr:
+                                if not self.check_piece_collision(self.engine.current_piece, dx=1):
+                                    self.engine.current_piece.x += 1
+                                self.engine.arr_counter = 0 
+                elif input['left']:
+                    if not self.held_input['left']:
+                        if not self.check_piece_collision(self.engine.current_piece, dx=-1):
+                            self.engine.current_piece.x -= 1
+                    else:
+                        self.engine.das_counter += 1
+                        if self.engine.das_counter >= self.engine.das:
+                            self.engine.arr_counter += 1
+                            if self.engine.arr_counter >= self.engine.arr:
+                                if not self.check_piece_collision(self.engine.current_piece, dx=-1):
+                                    self.engine.current_piece.x -= 1
+                                self.engine.arr_counter = 0
+                else:
+                    self.engine.das_counter = 0
+                    self.engine.arr_counter = 0
+
+                if input['soft_drop']:
+                    self.engine.gravity_counter += 1 # increase gravity counter by 1 for each frame soft
+                    if self.engine.current_piece is not None and self.is_piece_landed():
+                        self.lock_piece() # set lock delay counter to max to lock the piece immediately
+                if input['hard_drop'] and not self.held_input['hard_drop']:
+                    while self.engine.current_piece is not None and not self.is_piece_landed():
+                        self.engine.current_piece.y += 1
+        else:
+            self.engine.are_counter += 1
+            self.engine.gravity_counter = 0
+            if self.engine.are_counter >= self.engine.are:
+                self.engine.are_counter = 0
+                self.engine.current_piece = Piece(random.randint(0, 6))
 
         self.held_input = input
 
