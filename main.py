@@ -18,6 +18,8 @@ class Engine:
         self.all_clears = 0 # Number of times the player has cleared the board completely.
         self.time = 0 # Time left in the current level, in frames. When it reaches 0, the player loses.
         self.big_mode = False # Big mode, when true, the pieces are 2x2 blocks instead of 1x1 blocks.
+        self.state = 'active' # Game state, can be 'active', 'are' and 'line_are'
+        self.lines = [] # Lines that are currently being cleared, used to determine which lines to draw as clearing and which lines to collapse after the line clear delay.
 
         '''
         Control Handling
@@ -237,7 +239,53 @@ class Game:
                     self.engine.board.grid[board_y][board_x].color = piece.color
         self.engine.current_piece = None
         self.engine.hold_used = False # reset hold usage for the next piece
-        self.engine.are_counter = 0 # reset ARE counter to start counting for the next piece
+        lines = self.check_line_clear() # check for line clears after locking the piece
+        self.engine.lines = lines # store the lines that are being cleared in the engine to be used for drawing and collapsing after the line clear delay
+        if lines:
+            self.engine.state = 'line_are'
+            self.clear_lines(lines)
+            self.engine.line_are_counter = 0 # reset line ARE counter to start counting for the line clear delay
+            self.engine.are_counter = 0
+        else:
+            self.engine.state = 'are'
+            self.engine.are_counter = 0 # reset ARE counter to start counting for the next piece
+
+    def check_line_clear(self):
+        '''
+        This method checks for line clears on the board. It should be called after locking a piece in place.
+        It checks each row of the board to see if it is completely filled with minos. If a row is filled, it clears that row and moves all rows above it down by one.
+        It returns the number of lines cleared.
+        Sequence:
+        Lock -> Line ARE -> Block fall -> ARE -> Spawn new piece
+        '''
+        lines_cleared = []
+        for y in range(self.engine.board.height):
+            if all(self.engine.board.grid[y][x].filled for x in range(self.engine.board.width)):
+                lines_cleared.append(y)
+        return lines_cleared
+    
+    def clear_lines(self, lines):
+        '''
+        This method clears the given lines from the board and moves all rows above them down by one. It should be called after the line clear delay has passed.
+        '''
+        for y in lines:
+            for x in range(self.engine.board.width):
+                self.engine.board.grid[y][x].filled = False
+                self.engine.board.grid[y][x].color = pygame.Color('black')
+
+    def collapse_lines(self, lines):
+        '''
+        This method collapses the given lines from the board by moving all rows above them down by one. It should be called after the line clear delay has passed and the lines have been cleared.
+        '''
+        for y in sorted(lines):
+            for row in range(y, 0, -1):
+                for x in range(self.engine.board.width):
+                    self.engine.board.grid[row][x].filled = self.engine.board.grid[row - 1][x].filled
+                    self.engine.board.grid[row][x].color = self.engine.board.grid[row - 1][x].color
+            for x in range(self.engine.board.width):
+                self.engine.board.grid[0][x].filled = False
+                self.engine.board.grid[0][x].color = pygame.Color('black')
+
 
     def check_rotation(self, piece, rotation):
         '''
@@ -406,11 +454,20 @@ class Game:
                     while self.engine.current_piece is not None and not self.is_piece_landed():
                         self.engine.current_piece.y += 1
         else:
-            self.engine.are_counter += 1
-            self.engine.gravity_counter = 0
-            if self.engine.are_counter >= self.engine.are:
-                self.engine.are_counter = 0
-                self.engine.current_piece = Piece(random.randint(0, 6))
+            if self.engine.state == 'are':
+                self.engine.are_counter += 1
+                self.engine.gravity_counter = 0
+                if self.engine.are_counter >= self.engine.are:
+                    self.engine.are_counter = 0
+                    self.engine.current_piece = Piece(random.randint(0, 6))
+                    self.engine.state = 'active'
+            elif self.engine.state == 'line_are':
+                self.engine.line_are_counter += 1
+                self.engine.gravity_counter = 0
+                if self.engine.line_are_counter >= self.engine.line_are:
+                    self.collapse_lines(self.engine.lines) # collapse the cleared lines before spawning the next piece
+                    self.engine.line_are_counter = 0
+                    self.engine.state = 'are'
 
         self.held_input = input
 
