@@ -369,30 +369,31 @@ class Game:
                         self.engine.current_piece.x += kick[0]
                         self.engine.current_piece.y += kick[1]
 
-                if input['right']:
-                    if not self.held_input['right']:
-                        if not self.check_piece_collision(self.engine.current_piece, dx=1):
-                            self.engine.current_piece.x += 1
-                    else:
-                        self.engine.das_counter += 1
-                        if self.engine.das_counter >= self.engine.das:
-                            self.engine.arr_counter += 1
-                            if self.engine.arr_counter >= self.engine.arr:
-                                if not self.check_piece_collision(self.engine.current_piece, dx=1):
-                                    self.engine.current_piece.x += 1
-                                self.engine.arr_counter = 0 
-                elif input['left']:
-                    if not self.held_input['left']:
-                        if not self.check_piece_collision(self.engine.current_piece, dx=-1):
-                            self.engine.current_piece.x -= 1
-                    else:
-                        self.engine.das_counter += 1
-                        if self.engine.das_counter >= self.engine.das:
-                            self.engine.arr_counter += 1
-                            if self.engine.arr_counter >= self.engine.arr:
-                                if not self.check_piece_collision(self.engine.current_piece, dx=-1):
-                                    self.engine.current_piece.x -= 1
-                                self.engine.arr_counter = 0
+                if input['right'] != input['left']: # if both left and right are pressed, or neither are pressed, don't move the piece horizontally
+                    if input['right']:
+                        if not self.held_input['right'] or (self.held_input['right'] == self.held_input['left']):
+                            if not self.check_piece_collision(self.engine.current_piece, dx=1):
+                                self.engine.current_piece.x += 1
+                        else:
+                            self.engine.das_counter += 1
+                            if self.engine.das_counter >= self.engine.das:
+                                self.engine.arr_counter += 1
+                                if self.engine.arr_counter >= self.engine.arr:
+                                    if not self.check_piece_collision(self.engine.current_piece, dx=1):
+                                        self.engine.current_piece.x += 1
+                                    self.engine.arr_counter = 0 
+                    elif input['left']:
+                        if not self.held_input['left'] or (self.held_input['left'] == self.held_input['right']):
+                            if not self.check_piece_collision(self.engine.current_piece, dx=-1):
+                                self.engine.current_piece.x -= 1
+                        else:
+                            self.engine.das_counter += 1
+                            if self.engine.das_counter >= self.engine.das:
+                                self.engine.arr_counter += 1
+                                if self.engine.arr_counter >= self.engine.arr:
+                                    if not self.check_piece_collision(self.engine.current_piece, dx=-1):
+                                        self.engine.current_piece.x -= 1
+                                    self.engine.arr_counter = 0
                 else:
                     self.engine.das_counter = 0
                     self.engine.arr_counter = 0
