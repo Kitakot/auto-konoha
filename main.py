@@ -10,9 +10,10 @@ class Engine:
     def __init__(self):
         self.board = Board()
         self.current_piece = None
-        self.next_piece = None
+        self.next_piece = [None, None, None, None, None, None] # Queue of the next 6 pieces that will spawn, initialized with None to allow any piece to spawn at the start of the game.
         self.hold_piece = None
         self.hold_used = False # Whether the player has used their hold for the current piece, resets when a new piece spawns.
+        self.piece_history = [Piece(4), Piece(4), Piece(5), Piece(5)] # History of the last 4 pieces that spawned, used to determine the next pieces that spawn. Initialized with S and Z pieces
         self.level = 0 # Current level, determines the speed of the pieces. Increases after each piece placed and line clear.
         self.lines_cleared = 0
         self.all_clears = 0 # Number of times the player has cleared the board completely.
@@ -200,6 +201,68 @@ class Game:
         self.engine = Engine()
         self.held_input = {'left': False, 'right': False, 'ccw1': False, 'cw1': False, 'ccw2': False, 'cw2': False, 'soft_drop': False, 'hard_drop': False} # Dictionary to keep track of which controls were held down in the previous frame, used to detect when a key is pressed down or released.
 
+        for _ in range(6):
+            self.generate_next_piece()
+            self.engine.next_piece.pop(0)
+
+    def generate_next_piece(self):
+        for i in range(6): #try to generate a non-duplicate piece 6 times.
+            next_piece_type = random.randint(0, 6)
+            if all(next_piece_type != piece.type for piece in self.engine.piece_history[-4:]): # check the last 4 pieces in the history to prevent duplicates
+                break
+        self.engine.next_piece.append(Piece(next_piece_type))
+        self.engine.piece_history.append(Piece(next_piece_type))
+
+    def spawn_piece(self, origin, input=None):
+        if origin == 'next':
+            self.engine.current_piece = self.engine.next_piece.pop(0)
+        if origin == 'hold':
+            self.engine.current_piece = self.engine.hold_piece
+        self.engine.current_piece.x = 3
+        self.engine.current_piece.y = 19
+        if input is not None:
+            if input['hold'] and not self.engine.hold_used:
+                self.hold_piece(input) # if hold is pressed when spawning a piece, hold the piece instead of spawning it, and spawn the next piece in the queue. If there is no next piece in the queue, spawn the held piece instead.
+            else:
+                if input['ccw1'] != input['ccw2']: # if one ccw button pressed, irs by -1
+                    self.rotate_current_piece(-1)
+                elif input['ccw1'] and input['ccw2']:
+                    self.rotate_current_piece(-2) # if both ccw buttons pressed, rotate by -2
+                if input['cw1'] != input['cw2']: # if one cw button pressed, irs by 1
+                    self.rotate_current_piece(1)
+                elif input['cw1'] and input['cw2']:
+                    self.rotate_current_piece(2) # if both cw buttons pressed, rotate by 2
+        self.generate_next_piece()
+        for dy in [19, 18, 17]: # try to bump the piece up by 0, 1, or 2 cells if it spawns colliding with the stack, if it still collides after trying to bump up, the game is over
+            self.engine.current_piece.y = dy
+            if not self.check_piece_collision(self.engine.current_piece):
+                return True
+        self.engine.current_piece = None # if the piece cannot be spawned, set it to None to indicate game over
+        return False
+
+    def hold_piece(self, input):
+        if self.engine.hold_used:
+            return # if hold has already been used for the current piece, do nothing
+        self.engine.hold_used = True # set hold used to true to prevent holding again until the next piece spawns
+        if self.engine.hold_piece is None:
+            self.engine.hold_piece = self.engine.current_piece
+            self.spawn_piece('next', input)
+        else:
+            hold_temp = self.engine.current_piece
+            self.spawn_piece('hold', input)
+            self.engine.hold_piece = hold_temp
+        self.engine.hold_piece.orientation = 0
+        self.engine.hold_piece.mask = self.engine.hold_piece.get_mask(self.engine.hold_piece.type, self.engine.hold_piece.orientation)
+        
+
+    def rotate_current_piece(self, rotation):
+        kick = self.check_rotation(self.engine.current_piece, rotation=rotation)
+        if kick is not None:
+            self.engine.current_piece.orientation = (self.engine.current_piece.orientation + rotation) % 4
+            self.engine.current_piece.mask = self.engine.current_piece.get_mask(self.engine.current_piece.type, self.engine.current_piece.orientation)
+            self.engine.current_piece.x += kick[0]
+            self.engine.current_piece.y += kick[1]
+    
     def check_piece_collision(self, piece, dx=0, dy=0, rotation=0):
         '''
         This method checks if the given piece would collide with the board or other pieces if it were moved by (dx, dy) and rotated by rotation steps.
@@ -356,6 +419,7 @@ class Game:
         cw2 = keys[pygame.K_w]
         soft_drop = keys[pygame.K_DOWN]
         hard_drop = keys[pygame.K_UP]
+        hold = keys[pygame.K_LSHIFT]
 
         return {
             'left': left,
@@ -365,7 +429,8 @@ class Game:
             'ccw2': ccw2,
             'cw2': cw2,
             'soft_drop': soft_drop,
-            'hard_drop': hard_drop
+            'hard_drop': hard_drop,
+            'hold': hold
         }
 
     def update(self):
@@ -387,35 +452,14 @@ class Game:
         if self.engine.current_piece is not None:
             if input is not None:
                 if input['ccw1'] and not self.held_input['ccw1']:
-                    kick = self.check_rotation(self.engine.current_piece, rotation=-1)
-                    if kick is not None:
-                        self.engine.current_piece.orientation = (self.engine.current_piece.orientation - 1) % 4
-                        self.engine.current_piece.mask = self.engine.current_piece.get_mask(self.engine.current_piece.type, self.engine.current_piece.orientation)
-                        self.engine.current_piece.x += kick[0]
-                        self.engine.current_piece.y += kick[1]
+                    self.rotate_current_piece(rotation=-1)
                 elif input['cw1'] and not self.held_input['cw1']:
-                    kick = self.check_rotation(self.engine.current_piece, rotation=1)
-                    if kick is not None:
-                        self.engine.current_piece.orientation = (self.engine.current_piece.orientation + 1) % 4
-                        self.engine.current_piece.mask = self.engine.current_piece.get_mask(self.engine.current_piece.type, self.engine.current_piece.orientation)
-                        self.engine.current_piece.x += kick[0]
-                        self.engine.current_piece.y += kick[1]
+                    self.rotate_current_piece(rotation=1)
 
                 if input['ccw2'] and not self.held_input['ccw2']:
-                    kick = self.check_rotation(self.engine.current_piece, rotation=-1)
-                    if kick is not None:
-                        self.engine.current_piece.orientation = (self.engine.current_piece.orientation - 1) % 4
-                        self.engine.current_piece.mask = self.engine.current_piece.get_mask(self.engine.current_piece.type, self.engine.current_piece.orientation)
-                        self.engine.current_piece.x += kick[0]
-                        self.engine.current_piece.y += kick[1]
-
+                    self.rotate_current_piece(rotation=-1)
                 elif input['cw2'] and not self.held_input['cw2']:
-                    kick = self.check_rotation(self.engine.current_piece, rotation=1)
-                    if kick is not None:
-                        self.engine.current_piece.orientation = (self.engine.current_piece.orientation + 1) % 4
-                        self.engine.current_piece.mask = self.engine.current_piece.get_mask(self.engine.current_piece.type, self.engine.current_piece.orientation)
-                        self.engine.current_piece.x += kick[0]
-                        self.engine.current_piece.y += kick[1]
+                    self.rotate_current_piece(rotation=1)
 
                 if input['right'] != input['left']: # if both left and right are pressed, or neither are pressed, don't move the piece horizontally
                     if input['right']:
@@ -453,13 +497,16 @@ class Game:
                 if input['hard_drop'] and not self.held_input['hard_drop']:
                     while self.engine.current_piece is not None and not self.is_piece_landed():
                         self.engine.current_piece.y += 1
+
+                if input['hold'] and not self.held_input['hold']:
+                    self.hold_piece(input)
         else:
             if self.engine.state == 'are':
                 self.engine.are_counter += 1
                 self.engine.gravity_counter = 0
                 if self.engine.are_counter >= self.engine.are:
                     self.engine.are_counter = 0
-                    self.engine.current_piece = Piece(random.randint(0, 6))
+                    self.spawn_piece('next', input)
                     self.engine.state = 'active'
             elif self.engine.state == 'line_are':
                 self.engine.line_are_counter += 1
@@ -519,13 +566,30 @@ class Renderer:
                     if piece.x + px == x and piece.y + py == y:
                         return True
         return False
+    
+    def draw_next_pieces(self):
+        for i in range(6):
+            piece = self.engine.next_piece[i]
+            if piece is not None:
+                for py in range(4):
+                    for px in range(4):
+                        if piece.mask[py][px] == 1:
+                            pygame.draw.rect(self.screen, piece.color, (HORIZONATAL_OFFSET + (3 + 4 * i) * 16 + px * 16, 2 * 16 + py * 16, 16, 16))
+        
+    def draw_hold_piece(self):
+        piece = self.engine.hold_piece
+        if piece is not None:
+            for py in range(4):
+                for px in range(4):
+                    if piece.mask[py][px] == 1:
+                        pygame.draw.rect(self.screen, piece.color, (HORIZONATAL_OFFSET + px * 16 - 4 * 16, 4 * 16 + py * 16, 16, 16))
 
 # Initialize Pygame
 pygame.init()
 
 # Set up the display
-WIDTH, HEIGHT = 800, 600
-HORIZONATAL_OFFSET = (WIDTH - 10 * 16) // 2
+WIDTH, HEIGHT = 640, 480
+HORIZONATAL_OFFSET = (WIDTH - 10 * 16) // 4
 VERTICAL_OFFSET = -(20 * 16) + (HEIGHT - 20 * 16) // 2
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Auto-Konoha")
@@ -554,6 +618,8 @@ while running:
     
     # Draw the game elements
     renderer.draw_board(game.engine.board)
+    renderer.draw_next_pieces()
+    renderer.draw_hold_piece()
     
     # Update display
     pygame.display.flip()
