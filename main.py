@@ -327,6 +327,16 @@ class Game:
         for y in range(self.engine.board.height):
             if all(self.engine.board.grid[y][x].filled for x in range(self.engine.board.width)):
                 lines_cleared.append(y)
+        bonus = len(lines_cleared)
+        bonus_lines = []
+        for line in lines_cleared:
+            for i in range(bonus+1):
+                if line + i not in lines_cleared and line + i not in bonus_lines and line + i < self.engine.board.height:
+                    bonus_lines.append(line + i)
+                if line - i not in lines_cleared and line - i >= 0:
+                    bonus_lines.append(line - i)
+        lines_cleared.extend(bonus_lines)
+        print(lines_cleared)
         return lines_cleared
     
     def clear_lines(self, lines):
