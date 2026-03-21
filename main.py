@@ -241,6 +241,8 @@ class Game:
         return False
 
     def hold_piece(self, input):
+        if self.engine.current_piece is None:
+            return # if there is no active piece (e.g. it locked this frame), hold cannot be used
         if self.engine.hold_used:
             return # if hold has already been used for the current piece, do nothing
         self.engine.hold_used = True # set hold used to true to prevent holding again until the next piece spawns
@@ -498,7 +500,7 @@ class Game:
                     while self.engine.current_piece is not None and not self.is_piece_landed():
                         self.engine.current_piece.y += 1
 
-                if input['hold'] and not self.held_input['hold']:
+                if input['hold'] and not self.held_input['hold'] and self.engine.current_piece is not None:
                     self.hold_piece(input)
         else:
             if self.engine.state == 'are':
