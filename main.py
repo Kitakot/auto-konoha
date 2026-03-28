@@ -542,6 +542,10 @@ class Game:
         This method updates the game state. It should be called every frame. It updates the engine's state based on the current controls and the passage of time.
         '''
         self.engine.time -= 1
+        if self.engine.time <= 0:
+            self.engine.time = 0
+            self.engine.current_piece = None # if time runs out, set current piece to None to indicate game over
+            self.engine.state = 'game_over'
         
         input = self.get_input()
 
