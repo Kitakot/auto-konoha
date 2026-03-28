@@ -18,7 +18,7 @@ class Engine:
         self.lines_cleared = 0
         self.all_clears = 0 # Number of times the player has cleared the board completely.
         self.time = 0 # Time left in the current level, in frames. When it reaches 0, the player loses.
-        self.big_mode = False # Big mode, when true, the pieces are 2x2 blocks instead of 1x1 blocks.
+        self.big_mode = True # Big mode, when true, the pieces are 2x2 blocks instead of 1x1 blocks.
         self.state = 'active' # Game state, can be 'active', 'are' and 'line_are'
         self.lines = [] # Lines that are currently being cleared, used to determine which lines to draw as clearing and which lines to collapse after the line clear delay.
 
@@ -205,6 +205,15 @@ class Game:
             self.generate_next_piece()
             self.engine.next_piece.pop(0)
 
+    def block_scale(self):
+        return 2 if self.engine.big_mode else 1
+
+    def horizontal_step(self):
+        return 2 if self.engine.big_mode else 1
+
+    def kick_step(self):
+        return 2 if self.engine.big_mode else 1
+
     def generate_next_piece(self):
         for i in range(6): #try to generate a non-duplicate piece 6 times.
             next_piece_type = random.randint(0, 6)
@@ -218,8 +227,9 @@ class Game:
             self.engine.current_piece = self.engine.next_piece.pop(0)
         if origin == 'hold':
             self.engine.current_piece = self.engine.hold_piece
-        self.engine.current_piece.x = 3
-        self.engine.current_piece.y = 19
+        self.engine.current_piece.x = 2 if self.engine.big_mode else 3
+        self.engine.current_piece.y = 18 if self.engine.big_mode else 19
+        print(self.engine.current_piece.x)
         if input is not None:
             if input['hold'] and not self.engine.hold_used:
                 self.hold_piece(input) # if hold is pressed when spawning a piece, hold the piece instead of spawning it, and spawn the next piece in the queue. If there is no next piece in the queue, spawn the held piece instead.
@@ -233,7 +243,7 @@ class Game:
                 elif input['cw1'] and input['cw2']:
                     self.rotate_current_piece(2) # if both cw buttons pressed, rotate by 2
         self.generate_next_piece()
-        for dy in [19, 18, 17]: # try to bump the piece up by 0, 1, or 2 cells if it spawns colliding with the stack, if it still collides after trying to bump up, the game is over
+        for dy in [19, 18, 17] if not self.engine.big_mode else [18, 17, 16]: # try to bump the piece up by 0, 1, or 2 cells if it spawns colliding with the stack, if it still collides after trying to bump up, the game is over
             self.engine.current_piece.y = dy
             if not self.check_piece_collision(self.engine.current_piece):
                 return True
@@ -272,15 +282,18 @@ class Game:
         '''
         new_orientation = (piece.orientation + rotation) % 4
         new_mask = piece.get_mask(piece.type, new_orientation)
+        scale = self.block_scale()
         for py in range(4):
             for px in range(4):
                 if new_mask[py][px] == 1:
-                    board_x = piece.x + px + dx
-                    board_y = piece.y + py + dy
-                    if board_x < 0 or board_x >= self.engine.board.width or board_y >= self.engine.board.height:
-                        return True # Collision with walls or floor
-                    if board_y >= 0 and self.engine.board.grid[board_y][board_x].filled:
-                        return True # Collision with filled cells
+                    for sy in range(scale):
+                        for sx in range(scale):
+                            board_x = piece.x + (px * scale) + sx + dx
+                            board_y = piece.y + (py * scale) + sy + dy
+                            if board_x < 0 or board_x >= self.engine.board.width or board_y >= self.engine.board.height:
+                                return True # Collision with walls or floor
+                            if board_y >= 0 and self.engine.board.grid[board_y][board_x].filled:
+                                return True # Collision with filled cells
         return False
 
     def is_piece_landed(self):
@@ -295,13 +308,17 @@ class Game:
         It updates the board grid to fill in the cells occupied by the piece, and then sets the current piece to None to spawn a new piece.
         '''
         piece = self.engine.current_piece
+        scale = self.block_scale()
         for py in range(4):
             for px in range(4):
                 if piece.mask[py][px] == 1:
-                    board_x = piece.x + px
-                    board_y = piece.y + py
-                    self.engine.board.grid[board_y][board_x].filled = True
-                    self.engine.board.grid[board_y][board_x].color = piece.color
+                    for sy in range(scale):
+                        for sx in range(scale):
+                            board_x = piece.x + (px * scale) + sx
+                            board_y = piece.y + (py * scale) + sy
+                            if 0 <= board_y < self.engine.board.height and 0 <= board_x < self.engine.board.width:
+                                self.engine.board.grid[board_y][board_x].filled = True
+                                self.engine.board.grid[board_y][board_x].color = piece.color
         self.engine.current_piece = None
         self.engine.hold_used = False # reset hold usage for the next piece
         lines = self.check_line_clear() # check for line clears after locking the piece
@@ -371,25 +388,27 @@ class Game:
         '''
         if not self.check_piece_collision(piece, dx=0, dy=0, rotation=rotation):
             return (0, 0) # No kick, just a normal rotation
+        kick_step = self.kick_step()
         if piece.type == 6: # O-piece, no kicks
             return None
         elif piece.type in [1, 2, 3, 4, 5]: # T, L, J, S, Z
-            for dx in [1, -1]: # Try kicks of 1 cell to the right and left
+            for dx in [kick_step, -kick_step]: # Try kicks to the right and left
                 if not self.check_piece_collision(piece, dx=dx, dy=0, rotation=rotation):
                     if piece.type in [1, 2, 3] and piece.orientation % 2 == 0 and self.check_center_column(piece, rotation): # from 3-wide to 2-wide, no kick off center column
                             continue
                     return (dx, 0) # Kick by dx cells horizontally
-            if piece.type == 1 and (piece.orientation + rotation) % 4 == 2 and piece.floorkicks == 0 and self.check_piece_collision(piece, dx=0, dy=1) and not self.check_piece_collision(piece, dx=0, dy=-1, rotation=rotation): # T-piece, rotating flat side down, try floor kick if the piece is touching the stack and hasn't floorkicked yet
+            t_floor_kick = -kick_step
+            if piece.type == 1 and (piece.orientation + rotation) % 4 == 2 and piece.floorkicks == 0 and self.check_piece_collision(piece, dx=0, dy=1) and not self.check_piece_collision(piece, dx=0, dy=t_floor_kick, rotation=rotation): # T-piece, rotating flat side down, try floor kick if the piece is touching the stack and hasn't floorkicked yet
                 piece.floorkicks += 1
-                return (0, -1) # Kick by 1 cell upwards
+                return (0, t_floor_kick) # Floor kick upwards
             return None # Rotation not possible
         else: # I-piece
-            if (piece.orientation + rotation) % 2 == 0 and (self.check_piece_collision(piece, dx=-1, dy=0) or self.check_piece_collision(piece, dx=1, dy=0)): # from 1 wide to 4-wide, needs to be touching stack to kick
-                for dx in [1, 2, -1]:
+            if (piece.orientation + rotation) % 2 == 0 and (self.check_piece_collision(piece, dx=-kick_step, dy=0) or self.check_piece_collision(piece, dx=kick_step, dy=0)): # from 1 wide to 4-wide, needs to be touching stack to kick
+                for dx in [kick_step, 2 * kick_step, -kick_step]:
                     if not self.check_piece_collision(piece, dx=dx, dy=0, rotation=rotation):
                         return (dx, 0) # Horizontal kick by dx cells
             elif (piece.orientation + rotation) % 2 == 1 and self.check_piece_collision(piece, dx=0, dy=1) and piece.floorkicks == 0: # needs to be touching stack to floor kick
-                for dy in[-1, -2]:
+                for dy in[-kick_step, -2 * kick_step]:
                     if not self.check_piece_collision(piece, dx=0, dy=dy, rotation=rotation):
                         piece.floorkicks = 1
                         return (0, dy) # Floor kick by dy cells
@@ -452,6 +471,7 @@ class Game:
         Sonic Drop: Immediate on key pressed down, drops the piece to the lowest possible position instantly. Does not lock the piece in place. no effect on holding down.
         '''
         if self.engine.current_piece is not None:
+            move_step = self.horizontal_step()
             if input is not None:
                 if input['ccw1'] and not self.held_input['ccw1']:
                     self.rotate_current_piece(rotation=-1)
@@ -466,27 +486,27 @@ class Game:
                 if input['right'] != input['left']: # if both left and right are pressed, or neither are pressed, don't move the piece horizontally
                     if input['right']:
                         if not self.held_input['right'] or (self.held_input['right'] == self.held_input['left']):
-                            if not self.check_piece_collision(self.engine.current_piece, dx=1):
-                                self.engine.current_piece.x += 1
+                            if not self.check_piece_collision(self.engine.current_piece, dx=move_step):
+                                self.engine.current_piece.x += move_step
                         else:
                             self.engine.das_counter += 1
                             if self.engine.das_counter >= self.engine.das:
                                 self.engine.arr_counter += 1
                                 if self.engine.arr_counter >= self.engine.arr:
-                                    if not self.check_piece_collision(self.engine.current_piece, dx=1):
-                                        self.engine.current_piece.x += 1
+                                    if not self.check_piece_collision(self.engine.current_piece, dx=move_step):
+                                        self.engine.current_piece.x += move_step
                                     self.engine.arr_counter = 0 
                     elif input['left']:
                         if not self.held_input['left'] or (self.held_input['left'] == self.held_input['right']):
-                            if not self.check_piece_collision(self.engine.current_piece, dx=-1):
-                                self.engine.current_piece.x -= 1
+                            if not self.check_piece_collision(self.engine.current_piece, dx=-move_step):
+                                self.engine.current_piece.x -= move_step
                         else:
                             self.engine.das_counter += 1
                             if self.engine.das_counter >= self.engine.das:
                                 self.engine.arr_counter += 1
                                 if self.engine.arr_counter >= self.engine.arr:
-                                    if not self.check_piece_collision(self.engine.current_piece, dx=-1):
-                                        self.engine.current_piece.x -= 1
+                                    if not self.check_piece_collision(self.engine.current_piece, dx=-move_step):
+                                        self.engine.current_piece.x -= move_step
                                     self.engine.arr_counter = 0
                 else:
                     self.engine.das_counter = 0
@@ -571,11 +591,14 @@ class Renderer:
         if self.engine.current_piece is None:
             return False
         piece = self.engine.current_piece
+        scale = 2 if self.engine.big_mode else 1
         for py in range(4):
             for px in range(4):
                 if piece.mask[py][px] == 1:
-                    if piece.x + px == x and piece.y + py == y:
-                        return True
+                    for sy in range(scale):
+                        for sx in range(scale):
+                            if piece.x + (px * scale) + sx == x and piece.y + (py * scale) + sy == y:
+                                return True
         return False
     
     def draw_next_pieces(self):
@@ -613,6 +636,8 @@ game = Game()
 renderer = Renderer(screen)
 renderer.engine = game.engine
 game.engine.current_piece = Piece(random.randint(0, 6))  # test piece
+game.engine.current_piece.x = 2 if game.engine.big_mode else 3
+game.engine.current_piece.y = 18 if game.engine.big_mode else 19
 
 # Main game loop
 running = True
