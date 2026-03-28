@@ -504,6 +504,16 @@ class Game:
                     self.hold_piece(input)
         else:
             if self.engine.state == 'are':
+                if input['right'] != input['left']:
+                    if input['right']:
+                        if self.held_input['right'] and (self.held_input['right'] != self.held_input['left']):
+                            self.engine.das_counter += 1
+                    elif input['left']:
+                        if self.held_input['left'] and (self.held_input['left'] != self.held_input['right']):
+                            self.engine.das_counter += 1
+                else:
+                    self.engine.das_counter = 0
+                    self.engine.arr_counter = 0
                 self.engine.are_counter += 1
                 self.engine.gravity_counter = 0
                 if self.engine.are_counter >= self.engine.are:
@@ -536,7 +546,6 @@ class Game:
             self.engine.lock_delay_counter = 0 # reset lock delay counter when piece falls (step reset)
             if self.is_piece_landed() and self.engine.current_piece.floorkicks >= 2:
                 self.lock_piece() # if the piece has floorkicked twice, it cannot be saved from locking by further floorkicks, so it locks immediately upon landing regardless of lock delay
-
 
 class Renderer:
     '''
