@@ -17,7 +17,7 @@ class Engine:
         self.level = 0 # Current level, determines the speed of the pieces. Increases after each piece placed and line clear.
         self.lines_cleared = 0
         self.all_clears = 0 # Number of times the player has cleared the board completely.
-        self.time = 0 # Time left in the current level, in frames. When it reaches 0, the player loses.
+        self.time = 15000 # Time left in the current level, in frames. When it reaches 0, the player loses.
         self.big_mode = True # Big mode, when true, the pieces are 2x2 blocks instead of 1x1 blocks.
         self.state = 'active' # Game state, can be 'active', 'are' and 'line_are'
         self.lines = [] # Lines that are currently being cleared, used to determine which lines to draw as clearing and which lines to collapse after the line clear delay.
@@ -42,6 +42,70 @@ class Engine:
 
         self.gravity = 4/256 # Gravity, measured in cells per frame (G). Determines how fast the piece falls. Increases with level. Caps at 21G.
         self.gravity_counter = 0 # Counter for gravity, counts the accumulated gavity in cells. When it reaches 1, the piece falls by one cell and the counter resets.
+
+        self.time_bonus_base = [1, 2, 5, 11]
+        self.all_clear_time_bonus = [300, 480, 660, 900]
+        self.hurryup_time_bonus = [0, 0, 0, 60] #time bonus added after level 1000 no matter if it is all clear or not.
+        self.level_bonus = [1, 2, 4, 6] # level added for line clears
+
+    def get_time_bonus(self, lines_cleared, all_clear):
+        '''
+        This method calculates the time bonus for clearing lines. The bonus is added to the timer when lines are cleared, and is based on the number of lines cleared and whether an all clear was achieved.
+        '''
+        if self.level >= 1000:
+            return self.hurryup_time_bonus[lines_cleared - 1]
+        else:
+            if all_clear:
+                return self.all_clear_time_bonus[lines_cleared - 1]
+            else:
+                return self.time_bonus_base[lines_cleared - 1]
+            
+    def get_level_bonus(self, lines_cleared):
+        '''
+        This method calculates the level bonus for clearing lines. The bonus is added to the level when lines are cleared, and is based on the number of lines cleared.
+        '''
+        return self.level_bonus[lines_cleared - 1]
+    
+    def update_gravity(self):
+        if self.level < 8:
+            self.gravity = 4/256
+        elif self.level < 19:
+            self.gravity = 5/256
+        elif self.level < 35:
+            self.gravity = 6/256
+        elif self.level < 40:
+            self.gravity = 8/256
+        elif self.level < 50:
+            self.gravity = 10/256
+        elif self.level < 60:
+            self.gravity = 12/256
+        elif self.level < 70:
+            self.gravity = 16/256
+        elif self.level < 80:
+            self.gravity = 32/256
+        elif self.level < 90:
+            self.gravity = 48/256
+        elif self.level < 101:
+            self.gravity = 64/256
+        elif self.level < 112:
+            self.gravity = 16/256
+        elif self.level < 121:
+            self.gravity = 48/256
+        elif self.level < 132:
+            self.gravity = 80/256
+        elif self.level < 144:
+            self.gravity = 128/256
+        elif self.level < 156:
+            self.gravity = 112/256
+        elif self.level < 167:
+            self.gravity = 144/256
+        elif self.level < 177:
+            self.gravity = 176/256
+        elif self.level < 200:
+            self.gravity = 192/256
+        else:
+            self.gravity = 21
+        
 
 class Board:
     '''
@@ -225,11 +289,13 @@ class Game:
     def spawn_piece(self, origin, input=None):
         if origin == 'next':
             self.engine.current_piece = self.engine.next_piece.pop(0)
+            if not self.engine.hold_used:
+                self.engine.level += 1 # increase level by 1 for each piece spawned
         if origin == 'hold':
             self.engine.current_piece = self.engine.hold_piece
         self.engine.current_piece.x = 2 if self.engine.big_mode else 3
         self.engine.current_piece.y = 18 if self.engine.big_mode else 19
-        print(self.engine.current_piece.x)
+        self.engine.update_gravity()
         if input is not None:
             if input['hold'] and not self.engine.hold_used:
                 self.hold_piece(input) # if hold is pressed when spawning a piece, hold the piece instead of spawning it, and spawn the next piece in the queue. If there is no next piece in the queue, spawn the held piece instead.
@@ -345,6 +411,17 @@ class Game:
             if all(self.engine.board.grid[y][x].filled for x in range(self.engine.board.width)):
                 lines_cleared.append(y)
         return lines_cleared
+
+    def is_all_clear(self):
+        '''
+        This method checks if the board is completely clear of minos. It should be called after clearing lines to check for an all clear.
+        It returns True if the board is clear, and False otherwise.
+        '''
+        for y in range(self.engine.board.height):
+            for x in range(self.engine.board.width):
+                if self.engine.board.grid[y][x].filled:
+                    return False
+        return True
     
     def clear_lines(self, lines):
         '''
@@ -354,6 +431,11 @@ class Game:
             for x in range(self.engine.board.width):
                 self.engine.board.grid[y][x].filled = False
                 self.engine.board.grid[y][x].color = pygame.Color('black')
+        if self.is_all_clear():
+            self.engine.all_clears += 1
+        lines_cleared = len(lines) // self.block_scale() # in big mode, each line clear actually clears 2 lines, so divide by the block scale to get the actual number of lines cleared for scoring and bonuses
+        self.engine.time += self.engine.get_time_bonus(lines_cleared=lines_cleared, all_clear=self.is_all_clear()) # add time bonus for clearing lines, more for more lines and all clear
+        self.engine.level += self.engine.get_level_bonus(lines_cleared=lines_cleared) # add level bonus for clearing lines
 
     def collapse_lines(self, lines):
         '''
@@ -574,6 +656,7 @@ class Renderer:
     def __init__(self, screen):
         self.screen = screen
         self.engine = None
+        self.hud_font = pygame.font.SysFont("Lucida Console", 32)
     
     def draw_board(self, board):
         for y in range(board.height):
@@ -618,6 +701,31 @@ class Renderer:
                     if piece.mask[py][px] == 1:
                         pygame.draw.rect(self.screen, piece.color, (HORIZONATAL_OFFSET + px * 16 - 4 * 16, 4 * 16 + py * 16, 16, 16))
 
+    def format_time(self, time):
+        minutes = time // 3600
+        seconds = (time % 3600) // 60
+        centiseconds = round(time % 60 / FPS * 100)
+        return f"{minutes:02d}:{seconds:02d}:{centiseconds:02d}"
+
+    def draw_right_info(self):
+        board_right = HORIZONATAL_OFFSET + 10 * 16
+        visible_top = VERTICAL_OFFSET + 30 * 16
+        x = board_right + 24
+        y = visible_top
+        line_gap = 34
+
+        info_lines = [
+            f"Time: {self.format_time(max(0, self.engine.time))}",
+            f"All Clears: {self.engine.all_clears}",
+            f"Level: {self.engine.level}",
+        ]
+
+        for idx, text in enumerate(info_lines):
+            text_surface = self.hud_font.render(text, True, pygame.Color('black'))
+            self.screen.blit(text_surface, (x, y + idx * line_gap))
+    
+    
+
 # Initialize Pygame
 pygame.init()
 
@@ -635,9 +743,7 @@ FPS = 60
 game = Game()
 renderer = Renderer(screen)
 renderer.engine = game.engine
-game.engine.current_piece = Piece(random.randint(0, 6))  # test piece
-game.engine.current_piece.x = 2 if game.engine.big_mode else 3
-game.engine.current_piece.y = 18 if game.engine.big_mode else 19
+game.spawn_piece('next')
 
 # Main game loop
 running = True
@@ -656,6 +762,7 @@ while running:
     renderer.draw_board(game.engine.board)
     renderer.draw_next_pieces()
     renderer.draw_hold_piece()
+    renderer.draw_right_info()
     
     # Update display
     pygame.display.flip()
