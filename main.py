@@ -434,6 +434,7 @@ class Game:
         if self.is_all_clear():
             self.engine.all_clears += 1
         lines_cleared = len(lines) // self.block_scale() # in big mode, each line clear actually clears 2 lines, so divide by the block scale to get the actual number of lines cleared for scoring and bonuses
+        self.engine.lines_cleared += lines_cleared
         self.engine.time += self.engine.get_time_bonus(lines_cleared=lines_cleared, all_clear=self.is_all_clear()) # add time bonus for clearing lines, more for more lines and all clear
         self.engine.level += self.engine.get_level_bonus(lines_cleared=lines_cleared) # add level bonus for clearing lines
 
@@ -656,6 +657,7 @@ class Renderer:
     def __init__(self, screen):
         self.screen = screen
         self.engine = None
+        self.game = None
         self.hud_font = pygame.font.SysFont("Lucida Console", 32)
     
     def draw_board(self, board):
@@ -723,6 +725,12 @@ class Renderer:
         for idx, text in enumerate(info_lines):
             text_surface = self.hud_font.render(text, True, pygame.Color('black'))
             self.screen.blit(text_surface, (x, y + idx * line_gap))
+
+    def debug_display_input(self):
+        input = self.game.held_input
+        input_text = f"Input: {'L' if input['left'] else ''}{'R' if input['right'] else ''}{'CCW1' if input['ccw1'] else ''}{'CW1' if input['cw1'] else ''}{'CCW2' if input['ccw2'] else ''}{'CW2' if input['cw2'] else ''}{'SD' if input['soft_drop'] else ''}{'HD' if input['hard_drop'] else ''}{'HOLD' if input['hold'] else ''}"
+        text_surface = self.hud_font.render(input_text, True, pygame.Color('black'))
+        self.screen.blit(text_surface, (HORIZONATAL_OFFSET, VERTICAL_OFFSET + 30 * 16 + 6 * 34))
     
     
 
@@ -743,6 +751,7 @@ FPS = 60
 game = Game()
 renderer = Renderer(screen)
 renderer.engine = game.engine
+renderer.game = game
 game.spawn_piece('next')
 
 # Main game loop
@@ -763,6 +772,7 @@ while running:
     renderer.draw_next_pieces()
     renderer.draw_hold_piece()
     renderer.draw_right_info()
+    renderer.debug_display_input()
     
     # Update display
     pygame.display.flip()
