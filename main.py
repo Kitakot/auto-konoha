@@ -290,7 +290,8 @@ class Game:
         if origin == 'next':
             self.engine.current_piece = self.engine.next_piece.pop(0)
             if not self.engine.hold_used:
-                self.engine.level += 1 # increase level by 1 for each piece spawned
+                if self.engine.level % 100 != 99: # level stop at x99
+                    self.engine.level += 1 # increase level by 1 for each piece spawned
         if origin == 'hold':
             self.engine.current_piece = self.engine.hold_piece
         self.engine.current_piece.x = 2 if self.engine.big_mode else 3
